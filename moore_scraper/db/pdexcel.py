@@ -17,7 +17,7 @@ class PandasExcelHelper(object):
     '''
     #how frequently to save the scraped items, i.e. interval of 5 means
     #5 items are saved at a time.
-    save_interval = 1
+    save_interval = 4
 
 
     def __init__(self, db_filename = "moore_grants_database.xlsx",
@@ -40,13 +40,14 @@ class PandasExcelHelper(object):
         self.report_filename = (report_prefix + "_" 
                                 + str(datetime.today())[:19]
                                 .replace(":","_").replace(" ","[") + "].xlsx")
-        #kept for posterity, in case only the date component is needed and we don't care about overwrites
-        #self.report_filename = report_prefix + "_" + str(date.today())
+        # kept for posterity, in case only the date component is needed and 
+        # we don't care about overwrites
+        # self.report_filename = report_prefix + "_" + str(date.today())
         self.db_filename = db_filename
         self.sheet_name = sheet_name
         self.dataframe = pd.read_excel(db_filename,sheet_name, index_col = index_column)
         self.usaved_sol_counter = 0
-        self.profile_counter = 0
+        self.added_counter = 0
         self.added_items = set()
         self.index_column = index_column
         
@@ -89,10 +90,10 @@ class PandasExcelHelper(object):
         self.added_items.add(key)
         self.dataframe.loc[key] = item_series
             
-        if(self.profile_counter < PandasExcelHelper.save_interval):
-            self.profile_counter += 1
+        if(self.added_counter < PandasExcelHelper.save_interval):
+            self.added_counter += 1
         else:
-            self.profile_counter = 0
+            self.added_counter = 0
             self.save_all()
 
         

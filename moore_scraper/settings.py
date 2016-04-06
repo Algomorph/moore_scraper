@@ -18,7 +18,7 @@ NEWSPIDER_MODULE = 'moore_scraper.spiders'
 
 ROBOTSTXT_OBEY = True
 RANDOMIZE_DOWNLOAD_DELAY = True
-DOWNLOAD_DELAY = 5.0
+DOWNLOAD_DELAY = 3.0
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
 # !!! ATTENTION: PLEASE REPLACE WITH YOUR OWN WEBSITE IF YOU ARE GOING TO USE USER_AGENT!
