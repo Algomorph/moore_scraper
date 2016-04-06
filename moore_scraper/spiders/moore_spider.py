@@ -17,29 +17,33 @@ See the License for the specific language governing permissions and
 limitations under the License.
 '''
 
-import scrapy
-import os.path
+from scrapy.contrib.spiders import Spider
+from scrapy.http import Request
+import re
+from moore_scraper.items import Grant 
 
-from moore_scraper.items import FellowProfile 
-
-class PackardSpider(scrapy.Spider):
+class MooreSpider(Spider):
     '''
     Spider used to crawl through the Fellowship Directory on the Packard Foundation website
     '''
-    name = "packard"
-    allowed_domains = ["www.packard.org"]
-    index = "https://www.packard.org"
-    base_url = (index + "/what-we-fund/conservation-and-science/science/"+
-                "packard-fellowships-for-science-and-engineering/fellowship"+
-                "-directory")
-    get_query = "/?display=grid"
-    start_url = base_url + get_query
+    name = "moore"
+    allowed_domains = ["www.moore.org"]
+    index = "https://www.moore.org"
+    base_url = (index + "/grants")
+    start_url = base_url
 
     def __init__(self,  *args, **kwargs):
         '''
         Constructor
         '''
-        super(PackardSpider, self).__init__(*args, **kwargs)
+        super(MooreSpider, self).__init__(self, *args, **kwargs)
+        
+    
+    def __del__(self):
+        self.selenium.close()
+        print(self.verificationErrors)
+        CrawlSpider.__del__(self)#@UndefinedVariable
+        
     
     #program entry point
     def start_requests(self):
@@ -47,54 +51,69 @@ class PackardSpider(scrapy.Spider):
         @override
         called to construct requests from start url(s)
         '''
-        yield scrapy.Request(url = PackardSpider.start_url, 
-                             callback=self.initiate_directory_parsing,
+        yield Request(url = MooreSpider.start_url, 
+                             callback=self.parse_directory_list,
                              method="GET")
-        
-    def initiate_directory_parsing(self, response):
-        profile_list_count =\
-        int(response.xpath("//a[@class='page-numbers']/text()")[-1].extract())
-        
-        links = [str(uc_link) for uc_link in 
-                 response.xpath("//div[@class='thumbnail']/a/@href").extract()]
-        for url in links:
-            if not self.db.contains(url):
-                yield scrapy.Request(url,callback=self.parse_profile,
-                                 method="GET")
-                
-        for i_profile_list in range(2,profile_list_count + 1):
-            url = PackardSpider.base_url + "/page/"+str(i_profile_list)\
-            + PackardSpider.get_query
-            yield scrapy.Request(url,callback=self.parse_directory_list,
-                                 method="GET")
     
     def parse_directory_list(self, response):
-        links = [str(uc_link) for uc_link in 
-                 response.xpath("//div[@class='thumbnail']/a/@href").extract()]
-        for url in links:
-            if not self.db.contains(url):
-                yield scrapy.Request(url,callback=self.parse_profile,
-                                 method="GET")
-            else:
-                print("Profile for {:s} is already in database. SKIPPING.".format(os.path.basename(url[:-1])))
-                
-    def parse_profile(self, response):
-        profile = FellowProfile()
-        profile["name"] = \
-        response.xpath("//div[@class='wpb_wrapper']/h1/text()")[0].extract()
+        has_next = \
+        response.xpath("//div[@class='pagination margin-ten no-margin-bottom']" +
+                       "/a/text()")[-1].extract() == 'Next'
         
-        profile["year"] = \
-        int(response.xpath("//div[@class='wpb_wrapper']/p/strong/text()")[0].extract()[:4])
+        links = \
+        response.xpath("//ul[@class='grant-tiles filterSortGridView']" +
+                       "//a[@class='button-white-teal btn btn-medium button " +
+                       "xs-margin-bottom-five']/@href").extract()
+        links = [MooreSpider.index + link for link in links]
         
-        profile["institution"], profile["field"] = \
-        response.xpath("//div[@id='fellow-header']//div[@class='wpb_wrapper']/p/a/text()")[:2].extract() 
+        for link in links:
+            if not self.db.contains(link):
+                yield Request(url = link, callback=self.parse_grant,
+                              method="GET")
         
-        synopsis_prelim = response.xpath("//div[@id='fellow-content']//div[@class='wpb_wrapper']/p/text()")
-        if(len(synopsis_prelim) == 0):
-            synopsis_prelim = response.xpath("//div[@id='fellow-content']//div[@class='wpb_wrapper']/p/span/text()")
-        profile["synopsis"] = synopsis_prelim[0].extract()
-        profile["url"] = response.url
-        yield profile
+        
+        if has_next:
+            next_url = MooreSpider.base_url + \
+            response.xpath("//div[@class='pagination margin-ten "+
+                           "no-margin-bottom']/a/@href")[-1].extract()
+            yield Request(url = next_url, 
+                         callback=self.parse_directory_list,
+                         method="GET")
+        
+        
+    def parse_grant(self, response):
+        grant = Grant()
+        grant["name"] = \
+        response.xpath("//section[@class='grantee-list-banner grant-detail-"+
+                       "banner fadeIn animated']//h3/text()")[0].extract()
+        
+        date_awarded = \
+        response.xpath("//div/span/text()[contains(.,'Date Awarded: ')]/../../../div[@class='right']/span/text()").extract()
+        date_awarded = None if len(date_awarded) == 0 else date_awarded[0]
+        
+        amount = \
+        response.xpath("//div/span/text()[contains(.,'Amount: ')]/../../../div[@class='right']/span/text()").extract()
+        amount = None if len(amount) == 0 else amount[0]
+        
+        term = \
+        response.xpath("//div/span/text()[contains(.,'Term: ')]/../../../div[@class='right']/span/text()").extract()
+        term = None if len(term) == 0 else term[0]
+        
+        grant_id = \
+        response.xpath("//div/span/text()[contains(.,'Grant ID: ')]/../../../div[@class='right']/span/text()").extract()
+        grant_id = None if len(grant_id) == 0 else grant_id[0]
+        
+        funding_area = \
+        response.xpath("//div/span/text()[contains(.,'Funding Area: ')]/../../../div[@class='right']/span/text()").extract()
+        funding_area = None if len(funding_area) == 0 else funding_area[0]
+
+        grant["date_awarded"] = date_awarded
+        grant["amount"] = amount
+        grant["term"] = term
+        grant["id"] = grant_id
+        grant["funding_area"] = funding_area
+        grant["url"] = response.url
+        yield grant
         
     
         

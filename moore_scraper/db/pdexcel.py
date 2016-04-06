@@ -8,7 +8,7 @@ import pandas as pd
 from pandas.io.excel import ExcelWriter
 import os
 from datetime import datetime
-from moore_scraper.items import FellowProfile
+from moore_scraper.items import Grant
 
 
 class PandasExcelHelper(object):
@@ -20,9 +20,9 @@ class PandasExcelHelper(object):
     save_interval = 1
 
 
-    def __init__(self, db_filename = "profiles_database.xlsx",
+    def __init__(self, db_filename = "moore_grants_database.xlsx",
                  report_prefix = "report", 
-                 sheet_name = "profiles",
+                 sheet_name = "grants",
                  index_column = "url",
                  report_only_new = True):
         '''
@@ -30,7 +30,7 @@ class PandasExcelHelper(object):
         '''
         if(not os.path.isfile(db_filename)):
             #generate a blank writable excel sheet from scratch
-            field_names = [field_name for field_name in FellowProfile.fields]
+            field_names = [field_name for field_name in Grant.fields]
             writer = ExcelWriter(db_filename)
             profile_dataframe = pd.DataFrame(columns = field_names)
             profile_dataframe.to_excel(writer,sheet_name)
@@ -44,7 +44,7 @@ class PandasExcelHelper(object):
         #self.report_filename = report_prefix + "_" + str(date.today())
         self.db_filename = db_filename
         self.sheet_name = sheet_name
-        self.profile_dataframe = pd.read_excel(db_filename,sheet_name, index_col = index_column)
+        self.dataframe = pd.read_excel(db_filename,sheet_name, index_col = index_column)
         self.usaved_sol_counter = 0
         self.profile_counter = 0
         self.added_items = set()
@@ -57,7 +57,7 @@ class PandasExcelHelper(object):
         that are not yet overdue
         '''
         print "\n\n========  Generating report...  ========"
-        df = self.profile_dataframe.copy()
+        df = self.dataframe.copy()
         ix = pd.Series([(True if ix in self.added_items else False ) 
                                       for ix in df.index ],
                                       index=df.index)
@@ -73,7 +73,7 @@ class PandasExcelHelper(object):
         
     def add_item(self,item):
         '''
-        Adds the item to the proper dataframe
+        Adds the item to the dataframe
         '''
         item = dict(item)
         
@@ -87,7 +87,7 @@ class PandasExcelHelper(object):
         item_series = pd.Series(name=key,data=item_body)
         
         self.added_items.add(key)
-        self.profile_dataframe.loc[key] = item_series
+        self.dataframe.loc[key] = item_series
             
         if(self.profile_counter < PandasExcelHelper.save_interval):
             self.profile_counter += 1
@@ -102,7 +102,7 @@ class PandasExcelHelper(object):
         '''
         print "\n\n========  Saving {:s}  ========".format(self.sheet_name)
         writer = ExcelWriter(self.db_filename)
-        self.profile_dataframe.to_excel(writer,self.sheet_name,merge_cells=False)
+        self.dataframe.to_excel(writer,self.sheet_name,merge_cells=False)
         writer.save()
         writer.close()
         print "========  Done saving.  ========\n"
@@ -111,4 +111,4 @@ class PandasExcelHelper(object):
         '''
         Checks whether the key is present in the dataframe
         '''
-        return key in self.profile_dataframe.index
+        return key in self.dataframe.index
